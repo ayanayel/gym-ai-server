@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gym AI Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #080b10;
+    --bg2:       #0d1117;
+    --bg3:       #111820;
+    --green:     #00ff88;
+    --green-dim: #00cc6a;
+    --red:       #ff3c5a;
+    --amber:     #ffb830;
+    --border:    rgba(0,255,136,0.15);
+    --text:      #e8edf3;
+    --muted:     #5a6678;
+    --font-hd:   'Bebas Neue', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+    --font-ar:   'Tajawal', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ar);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── grid noise overlay ─── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ─── scanline ─── */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.07) 2px,
+      rgba(0,0,0,0.07) 4px
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative; z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+
+  /* ─── header ─── */
+  header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 56px;
+    animation: fadeDown 0.7s ease both;
+  }
+
+  .logo-line {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo-icon {
+    width: 48px; height: 48px;
+    background: var(--green);
+    clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+    display: flex; align-items: center; justify-content: center;
+    animation: pulse-icon 3s ease-in-out infinite;
+  }
+
+  @keyframes pulse-icon {
+    0%,100% { box-shadow: 0 0 0 0 rgba(0,255,136,0.4); }
+    50%      { box-shadow: 0 0 24px 8px rgba(0,255,136,0.2); }
+  }
+
+  h1 {
+    font-family: var(--font-hd);
+    font-size: clamp(2.4rem, 6vw, 3.8rem);
+    letter-spacing: 4px;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  h1 span { color: var(--green); }
+
+  .tagline {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  /* ─── capture buttons ─── */
+  .btn-group {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 40px;
+    animation: fadeUp 0.7s 0.2s ease both;
+  }
+
+  .btn-capture {
+    position: relative;
+    padding: 18px 48px;
+    border: none;
+    border-radius: 4px;
+    font-family: var(--font-hd);
+    font-size: 1.4rem;
+    letter-spacing: 3px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform 0.15s, box-shadow 0.3s;
+  }
+
+  .btn-capture::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.12), transparent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .btn-capture:hover::before { opacity: 1; }
+  .btn-capture:hover { transform: translateY(-2px); }
+  .btn-capture:active { transform: scale(0.97); }
+
+  .btn-front {
+    background: var(--green);
+    color: #000;
+    box-shadow: 0 4px 24px rgba(0,255,136,0.35);
+  }
+  .btn-front:hover { box-shadow: 0 8px 40px rgba(0,255,136,0.5); }
+
+  .btn-side {
+    background: transparent;
+    color: var(--green);
+    border: 2px solid var(--green);
+    box-shadow: 0 4px 24px rgba(0,255,136,0.15);
+  }
+  .btn-side:hover { box-shadow: 0 8px 40px rgba(0,255,136,0.3); }
+
+  /* ─── status bar ─── */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    height: 36px;
+    margin-bottom: 32px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    transition: color 0.3s;
+  }
+
+  .status-bar.active { color: var(--green); }
+  .status-bar.error  { color: var(--red); }
+
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  .status-bar.active .spinner { display: block; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── result card ─── */
+  #result-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    display: none;
+  }
+
+  #result-card.visible {
+    opacity: 1;
+    transform: translateY(0);
+    display: block;
+  }
+
+  /* result verdict banner */
+  .verdict-banner {
+    padding: 20px 28px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.4s;
+  }
+
+  .verdict-banner.correct {
+    background: linear-gradient(135deg, rgba(0,255,136,0.12), transparent);
+  }
+  .verdict-banner.bad {
+    background: linear-gradient(135deg, rgba(255,60,90,0.12), transparent);
+  }
+  .verdict-banner.unclear {
+    background: linear-gradient(135deg, rgba(255,184,48,0.1), transparent);
+  }
+
+  .verdict-icon {
+    font-size: 2.2rem;
+    flex-shrink: 0;
+    animation: popIn 0.4s 0.1s cubic-bezier(0.175,0.885,0.32,1.275) both;
+  }
+
+  @keyframes popIn {
+    from { transform: scale(0.4); opacity: 0; }
+    to   { transform: scale(1);   opacity: 1; }
+  }
+
+  .verdict-text h2 {
+    font-family: var(--font-hd);
+    font-size: 2rem;
+    letter-spacing: 3px;
+    line-height: 1.1;
+  }
+  .verdict-text h2.correct { color: var(--green); }
+  .verdict-text h2.bad     { color: var(--red); }
+  .verdict-text h2.unclear { color: var(--amber); }
+
+  .verdict-text p {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* score ring */
+  .score-section {
+    padding: 24px 28px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 28px;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .ring-wrap { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+
+  .ring-wrap svg { transform: rotate(-90deg); }
+
+  .ring-bg { fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 6; }
+  .ring-fill {
+    fill: none;
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-dasharray: 220;
+    stroke-dashoffset: 220;
+    transition: stroke-dashoffset 1s cubic-bezier(0.4,0,0.2,1), stroke 0.4s;
+  }
+
+  .ring-label {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-family: var(--font-hd);
+    font-size: 1.4rem;
+    line-height: 1;
+  }
+  .ring-label span {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--muted);
+  }
+
+  /* metric bars */
+  .metrics-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .metric-row {
+    display: grid;
+    grid-template-columns: 130px 1fr 40px;
+    align-items: center;
+    gap: 10px;
+    opacity: 0;
+    transform: translateX(12px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+
+  .metric-row.visible {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .metric-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .metric-bar-bg {
+    height: 4px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .metric-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  .metric-val {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-align: right;
+  }
+
+  /* issues section */
+  .issues-section {
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+    display: none;
+  }
+
+  .issues-section.has-issues { display: block; }
+
+  .issues-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .issue-item {
+    background: rgba(255,60,90,0.05);
+    border: 1px solid rgba(255,60,90,0.15);
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+  }
+
+  .issue-item.visible { opacity: 1; transform: translateY(0); }
+
+  .issue-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ff7a8a;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .issue-tip {
+    font-size: 13px;
+    color: #a0b0c0;
+    line-height: 1.7;
+    padding-right: 22px;
+    border-right: 2px solid rgba(0,255,136,0.3);
+  }
+
+  /* image section */
+  .image-section {
+    padding: 20px 28px;
+    display: none;
+  }
+
+  .image-section.has-image { display: block; }
+
+  .image-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .image-wrap {
+    position: relative;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    max-width: 380px;
+  }
+
+  .image-wrap img {
+    width: 100%;
+    display: block;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+
+  .image-wrap img.loaded { opacity: 1; }
+
+  .image-corner {
+    position: absolute;
+    width: 20px; height: 20px;
+    border-color: var(--green);
+    border-style: solid;
+    opacity: 0.6;
+  }
+
+  .image-corner.tl { top: 8px; left: 8px; border-width: 2px 0 0 2px; }
+  .image-corner.tr { top: 8px; right: 8px; border-width: 2px 2px 0 0; }
+  .image-corner.bl { bottom: 8px; left: 8px; border-width: 0 0 2px 2px; }
+  .image-corner.br { bottom: 8px; right: 8px; border-width: 0 2px 2px 0; }
+
+  /* history section */
+  .history-section {
+    padding: 20px 28px;
+    border-top: 1px solid var(--border);
+    display: none;
+  }
+  .history-section.has-history { display: block; }
+
+  .history-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .history-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--bg3);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    animation: fadeUp 0.3s ease both;
+  }
+
+  .history-row .h-score {
+    font-size: 14px;
+    font-family: var(--font-hd);
+    letter-spacing: 1px;
+    min-width: 42px;
+  }
+  .history-row .h-time { color: var(--muted); flex: 1; }
+  .history-row .h-type {
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .history-row .h-type.front { background: rgba(0,255,136,0.12); color: var(--green); }
+  .history-row .h-type.side  { background: rgba(100,140,255,0.12); color: #7eb0ff; }
+
+  .history-row .h-trend {
+    font-size: 16px;
+  }
+
+  /* keyframes */
+  @keyframes fadeDown { from { opacity:0; transform:translateY(-16px); } to { opacity:1; transform:none; } }
+  @keyframes fadeUp   { from { opacity:0; transform:translateY(16px);  } to { opacity:1; transform:none; } }
+
+  /* capture overlay on btn */
+  .btn-capture.loading {
+    pointer-events: none;
+    opacity: 0.6;
+  }
+
+  /* corner decoration on page */
+  .page-corner {
+    position: fixed;
+    width: 60px; height: 60px;
+    border-color: rgba(0,255,136,0.12);
+    border-style: solid;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .page-corner.tl { top: 20px; left: 20px; border-width: 1px 0 0 1px; }
+  .page-corner.br { bottom: 20px; right: 20px; border-width: 0 1px 1px 0; }
+
+  @media (max-width: 600px) {
+    .score-section { grid-template-columns: 1fr; }
+    .metric-row { grid-template-columns: 110px 1fr 36px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page-corner tl"></div>
+<div class="page-corner br"></div>
+
+<div class="container">
+
+  <!-- ─── Header ─── -->
+  <header>
+    <div class="logo-line">
+      <div class="logo-icon"></div>
+      <h1>GYM <span>AI</span></h1>
+    </div>
+    <p class="tagline">posture analysis system · real-time</p>
+  </header>
+
+  <!-- ─── Buttons ─── -->
+  <div class="btn-group">
+    <button class="btn-capture btn-front" onclick="capture('front')" id="btn-front">
+      ◉ FRONT
+    </button>
+    <button class="btn-capture btn-side" onclick="capture('side')" id="btn-side">
+      ◈ SIDE
+    </button>
+  </div>
+
+  <!-- ─── Status ─── -->
+  <div class="status-bar" id="status">
+    <div class="spinner"></div>
+    <span id="status-text">STANDBY — WAITING FOR CAPTURE</span>
+  </div>
+
+  <!-- ─── Result Card ─── -->
+  <div id="result-card">
+
+    <!-- Verdict -->
+    <div class="verdict-banner" id="verdict-banner">
+      <div class="verdict-icon" id="verdict-icon"></div>
+      <div class="verdict-text">
+        <h2 id="verdict-title"></h2>
+        <p id="verdict-sub"></p>
+      </div>
+    </div>
+
+    <!-- Score + Metrics -->
+    <div class="score-section">
+      <div class="ring-wrap">
+        <svg width="80" height="80" viewBox="0 0 80 80">
+          <circle class="ring-bg" cx="40" cy="40" r="35"/>
+          <circle class="ring-fill" id="ring-fill" cx="40" cy="40" r="35"/>
+        </svg>
+        <div class="ring-label">
+          <strong id="score-num">0</strong>
+          <span>SCORE</span>
+        </div>
+      </div>
+
+      <div class="metrics-grid" id="metrics-grid">
+        <!-- filled by JS -->
+      </div>
+    </div>
+
+    <!-- Issues & Tips -->
+    <div class="issues-section" id="issues-section">
+      <div class="issues-title">⚠ مشاكل وتوصيات</div>
+      <div id="issues-list"></div>
+    </div>
+
+    <!-- Processed Image -->
+    <div class="image-section" id="image-section">
+      <div class="image-label">// OUTPUT IMAGE</div>
+      <div class="image-wrap">
+        <img id="result-img" src="" alt="processed">
+        <div class="image-corner tl"></div>
+        <div class="image-corner tr"></div>
+        <div class="image-corner bl"></div>
+        <div class="image-corner br"></div>
+      </div>
+    </div>
+
+    <!-- History -->
+    <div class="history-section" id="history-section">
+      <div class="history-label">// SESSION HISTORY</div>
+      <div class="history-list" id="history-list"></div>
+    </div>
+
+  </div><!-- /result-card -->
+
+</div><!-- /container -->
+
+<script>
+/* ✅ IPs الصحيحة */
+const SERVER = 'http://192.168.3.114:8000';
+const ESP    = 'http://192.168.3.115'; // 🔥 هذا كان الغلط
+
+let sessionHistory = [];
+let lastOverallScore = null;
+
+function setStatus(msg, state='idle') {
+  const bar  = document.getElementById('status');
+  const text = document.getElementById('status-text');
+  bar.className = 'status-bar ' + state;
+  text.textContent = msg;
+}
+
+function setBtnsLoading(loading) {
+  ['btn-front','btn-side'].forEach(id => {
+    document.getElementById(id).classList.toggle('loading', loading);
+  });
+}
+
+function scoreColor(s) {
+  if (s >= 80) return 'var(--green)';
+  if (s >= 55) return 'var(--amber)';
+  return 'var(--red)';
+}
+
+function renderResult(data, type) {
+
+  const raw = data.result || '';
+
+  const isCorrect = raw.includes("Correct");
+  const isBad     = raw.includes("Bad");
+
+  let overall = isCorrect ? 90 : isBad ? 40 : 60;
+
+  document.getElementById("verdict-title").innerText =
+    isCorrect ? "CORRECT POSTURE" :
+    isBad ? "BAD POSTURE" :
+    "POSTURE UNCLEAR";
+
+  document.getElementById("verdict-title").className =
+    isCorrect ? "correct" :
+    isBad ? "bad" : "unclear";
+
+  document.getElementById("verdict-icon").innerText =
+    isCorrect ? "✓" :
+    isBad ? "✗" : "?";
+
+  document.getElementById("score-num").innerText = overall;
+
+  const img = document.getElementById("result-img");
+  if (data.image) {
+    img.src = SERVER + data.image + "?t=" + Date.now();
+    document.getElementById("image-section").classList.add("has-image");
+  }
+
+  const card = document.getElementById("result-card");
+  card.style.display = "block";
+  setTimeout(() => card.classList.add("visible"), 50);
+}
+
+async function capture(type) {
+
+  setStatus('CAPTURING...', 'active');
+  setBtnsLoading(true);
+
+  try {
+
+    await fetch(`${ESP}/capture?type=${type}`);
+
+    setStatus('ANALYZING...', 'active');
+
+    await new Promise(r => setTimeout(r, 3000));
+
+    const res  = await fetch(`${SERVER}/last-result`);
+    const data = await res.json();
+
+    setStatus('DONE', 'idle');
+    renderResult(data, type);
+
+  } catch (err) {
+    console.error(err);
+    setStatus('CONNECTION ERROR', 'error');
+  } finally {
+    setBtnsLoading(false); // 🔥 مهم جداً
+  }
+}
+</script>
+</body>
+</html>
